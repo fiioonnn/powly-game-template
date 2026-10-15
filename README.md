@@ -2,9 +2,9 @@
 
 A clean React + TypeScript + Vite starting point for client-only games on Powly.
 
-It connects to Powly before React loads and shows a minimal status screen with player, launch,
-scope, save, achievement, leaderboard, and platform API information. Outside Powly it uses local
-preview data.
+It connects to Powly before React loads and includes a lightweight gamified starter screen, a local
+XP counter, and compact player, save, achievement, leaderboard, and platform API information.
+Outside Powly it uses local preview data.
 
 ## Start
 
@@ -45,7 +45,7 @@ zip. Test the build before making it live.
 ```text
 src/main.tsx              connects to Powly first, then loads React
 src/platform.ts           typed SDK and platform API reads
-src/App.tsx               minimal platform information screen
+src/App.tsx               gamified starter screen and platform information
 src/powly/                bundled Powly SDK and TypeScript declarations
 scripts/update-sdk.mjs    refreshes the checked-in SDK from Powly
 ```
