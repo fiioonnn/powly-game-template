@@ -1,7 +1,6 @@
-import type { Achievement, LeaderboardEntry, PowlySession } from "./powly/powly.mjs";
+import type { Achievement, PowlySession } from "./powly/powly.mjs";
 
 export const SAVE_KEY = "best-score";
-export const LEADERBOARD_KEY = "high-score";
 export const ACHIEVEMENT_KEY = "first-run";
 
 type ApiProfile = {
@@ -15,8 +14,6 @@ export type PlatformSnapshot = {
   apiProfile: ApiProfile;
   bestScore: number;
   achievements: Achievement[];
-  leaderboard: LeaderboardEntry[];
-  issues: string[];
 };
 
 export const previewSnapshot: PlatformSnapshot = {
@@ -38,44 +35,28 @@ export const previewSnapshot: PlatformSnapshot = {
       unlockedAt: new Date().toISOString(),
     },
   ],
-  leaderboard: [
-    { rank: 1, playerId: "preview-1", username: "Nova", score: 32 },
-    { rank: 2, playerId: "preview-2", username: "Mika", score: 24 },
-    { rank: 3, playerId: "preview-player", username: "Local player", score: 12 },
-  ],
-  issues: [],
 };
 
-type Result<T> = { value: T; issue?: never } | { value: null; issue: string };
-
-async function safely<T>(label: string, work: () => Promise<T>): Promise<Result<T>> {
+async function safely<T>(label: string, fallback: T, work: () => Promise<T>): Promise<T> {
   try {
-    return { value: await work() };
+    return await work();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    return { value: null, issue: `${label}: ${message}` };
+    console.warn(`Powly ${label}: ${message}`);
+    return fallback;
   }
 }
 
 /** Reads browser-safe platform data. One missing Studio resource never blocks the rest of the UI. */
 export async function loadPlatformSnapshot(session: PowlySession): Promise<PlatformSnapshot> {
-  const [profile, bestScore, achievements, leaderboard] = await Promise.all([
+  const [apiProfile, bestScore, achievements] = await Promise.all([
     // api() is the typed escape hatch for platform endpoints not wrapped by another SDK method.
-    safely("GET /me", () => session.api<ApiProfile>("/me")),
-    safely(`Save ${SAVE_KEY}`, () => session.saves.get<number>(SAVE_KEY)),
-    safely("Achievements", () => session.achievements.list()),
-    safely(`Leaderboard ${LEADERBOARD_KEY}`, () => session.leaderboards.top(LEADERBOARD_KEY, 5)),
+    safely("GET /me", { ...session.profile, scopes: session.scopes }, () =>
+      session.api<ApiProfile>("/me"),
+    ),
+    safely(`save ${SAVE_KEY}`, 0, async () => (await session.saves.get<number>(SAVE_KEY)) ?? 0),
+    safely("achievements", [], () => session.achievements.list()),
   ]);
 
-  const results = [profile, bestScore, achievements, leaderboard];
-  return {
-    apiProfile: profile.value ?? {
-      ...session.profile,
-      scopes: session.scopes,
-    },
-    bestScore: bestScore.value ?? 0,
-    achievements: achievements.value ?? [],
-    leaderboard: leaderboard.value ?? [],
-    issues: results.flatMap((result) => (result.issue ? [result.issue] : [])),
-  };
+  return { apiProfile, bestScore, achievements };
 }
