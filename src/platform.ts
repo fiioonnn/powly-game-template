@@ -31,7 +31,7 @@ export const previewSnapshot: PlatformSnapshot = {
     {
       key: ACHIEVEMENT_KEY,
       name: "First run",
-      description: "Finish your first round.",
+      description: "The game connected to Powly.",
       rarity: "common",
       hidden: false,
       unlocked: true,
@@ -78,18 +78,4 @@ export async function loadPlatformSnapshot(session: PowlySession): Promise<Platf
     leaderboard: leaderboard.value ?? [],
     issues: results.flatMap((result) => (result.issue ? [result.issue] : [])),
   };
-}
-
-/** Demonstrates the three client-write APIs used by the starter game. */
-export async function recordRound(session: PowlySession, score: number, previousBest: number) {
-  const work: Promise<unknown>[] = [session.leaderboards.submit(LEADERBOARD_KEY, score)];
-  if (score > previousBest) work.push(session.saves.set(SAVE_KEY, score));
-  work.push(session.achievements.unlock(ACHIEVEMENT_KEY));
-
-  const results = await Promise.allSettled(work);
-  return results.flatMap((result) =>
-    result.status === "rejected"
-      ? [result.reason instanceof Error ? result.reason.message : "A platform write failed."]
-      : [],
-  );
 }

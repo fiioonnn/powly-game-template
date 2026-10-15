@@ -2,9 +2,9 @@
 
 A clean React + TypeScript + Vite starting point for client-only games on Powly.
 
-It connects to Powly before React loads, displays player and launch information, reads the
-platform API, and includes a small score game that demonstrates browser-enabled saves,
-leaderboards, and achievements. Outside Powly it runs with local preview data.
+It connects to Powly before React loads and shows a minimal status screen with player, launch,
+scope, save, achievement, leaderboard, and platform API information. Outside Powly it uses local
+preview data.
 
 ## Start
 
@@ -18,16 +18,16 @@ npm run dev
 Open your game in **Studio → Developer mode**, enter `http://localhost:5173`, and press **Open**.
 Opening Vite directly shows the local preview; the real SDK only connects inside Powly.
 
-## Configure the demo in Studio
+## Optional Studio data
 
-The template keeps working without these resources, but creating them enables persistence:
+The information screen reads these example resources when they exist:
 
-1. **Saves → New save**: `best-score`, Number, browser writes allowed.
-2. **Leaderboards → New leaderboard**: `high-score`, descending, browser submissions allowed.
-3. **Achievements → New achievement**: `first-run`, browser unlocks allowed.
+1. **Saves → New save**: `best-score`, Number.
+2. **Leaderboards → New leaderboard**: `high-score`, descending.
+3. **Achievements → New achievement**: `first-run`.
 
-Browser writes are appropriate for prototypes and low-stakes data only. Players control their
-browsers. Submit competitive scores and trusted progress from a backend.
+If you later enable browser writes, use them only for prototypes and low-stakes data. Players
+control their browsers. Submit competitive scores and trusted progress from a backend.
 
 ## Build and upload
 
@@ -44,8 +44,8 @@ zip. Test the build before making it live.
 
 ```text
 src/main.tsx              connects to Powly first, then loads React
-src/platform.ts           typed SDK/API reads and client-write examples
-src/App.tsx               starter game and platform information UI
+src/platform.ts           typed SDK and platform API reads
+src/App.tsx               minimal platform information screen
 src/powly/                bundled Powly SDK and TypeScript declarations
 scripts/update-sdk.mjs    refreshes the checked-in SDK from Powly
 ```
