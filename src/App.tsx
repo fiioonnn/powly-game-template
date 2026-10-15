@@ -39,9 +39,8 @@ export function App({ connection }: { connection: Connection }) {
   return (
     <main>
       <section className="starter">
-        <p className="brand">Powly</p>
-        <h1>React + Vite game template</h1>
-        <p className="intro">A clean starting point for client-only games on Powly.</p>
+        <h1>Powly game template</h1>
+        <p className="intro">React + TypeScript + Vite</p>
 
         <section className="details" aria-label="Powly platform information">
           <header className="player">

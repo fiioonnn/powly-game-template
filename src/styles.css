@@ -26,41 +26,27 @@ main {
 }
 
 .starter {
-  width: min(560px, 100%);
+  width: min(520px, 100%);
   text-align: center;
-}
-
-.brand {
-  display: inline-block;
-  margin: 0 0 22px;
-  border-radius: 8px;
-  background: #ececee;
-  padding: 7px 10px;
-  color: #212429;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
 }
 
 h1 {
   margin: 0;
-  font-size: clamp(30px, 7vw, 44px);
-  letter-spacing: -0.045em;
+  font-size: clamp(30px, 7vw, 40px);
+  letter-spacing: -0.04em;
   line-height: 1.1;
 }
 
 .intro {
-  margin: 14px 0 30px;
+  margin: 10px 0 32px;
   color: rgb(236 236 238 / 55%);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
 .details {
-  overflow: hidden;
-  border: 1px solid rgb(236 236 238 / 8%);
-  border-radius: 12px;
-  background: #2c2f34;
+  display: grid;
+  gap: 10px;
   text-align: left;
 }
 
@@ -68,8 +54,10 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px;
-  border-bottom: 1px solid rgb(236 236 238 / 8%);
+  border-radius: 18px;
+  background: #2c2f34;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 10%);
 }
 
 .player img,
@@ -79,7 +67,7 @@ h1 {
   height: 36px;
   flex: 0 0 auto;
   place-items: center;
-  border-radius: 9px;
+  border-radius: 12px;
 }
 
 .player img {
@@ -130,23 +118,16 @@ dt {
 .details dl {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
   margin: 0;
-  padding: 16px;
 }
 
 .details dl > div {
   min-width: 0;
-  padding: 0 14px;
-  border-left: 1px solid rgb(236 236 238 / 8%);
-}
-
-.details dl > div:first-child {
-  padding-left: 0;
-  border-left: 0;
-}
-
-.details dl > div:last-child {
-  padding-right: 0;
+  border-radius: 16px;
+  background: #2c2f34;
+  padding: 14px;
+  box-shadow: 0 12px 30px rgb(0 0 0 / 10%);
 }
 
 dt {
@@ -189,7 +170,6 @@ code {
   .details dl > div,
   .details dl > div:first-child,
   .details dl > div:last-child {
-    padding: 0;
-    border: 0;
+    padding: 14px;
   }
 }
