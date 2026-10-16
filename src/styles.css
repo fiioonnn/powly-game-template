@@ -1,7 +1,7 @@
 :root {
   color: #ececee;
   background: #212429;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -44,12 +44,6 @@ h1 {
   line-height: 1.5;
 }
 
-.details {
-  display: grid;
-  gap: 10px;
-  text-align: left;
-}
-
 .player {
   display: flex;
   align-items: center;
@@ -58,6 +52,7 @@ h1 {
   background: #2c2f34;
   padding: 14px;
   box-shadow: 0 12px 30px rgb(0 0 0 / 10%);
+  text-align: left;
 }
 
 .player img,
@@ -87,8 +82,7 @@ h1 {
 }
 
 .player-label,
-.status,
-dt {
+.status {
   color: rgb(236 236 238 / 45%);
   font-size: 11px;
 }
@@ -115,32 +109,6 @@ dt {
   background: #86efac;
 }
 
-.details dl {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin: 0;
-}
-
-.details dl > div {
-  min-width: 0;
-  border-radius: 16px;
-  background: #2c2f34;
-  padding: 14px;
-  box-shadow: 0 12px 30px rgb(0 0 0 / 10%);
-}
-
-dt {
-  margin-bottom: 5px;
-}
-
-dd {
-  margin: 0;
-  color: rgb(236 236 238 / 85%);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .hint {
   margin: 20px 0 7px;
   color: rgb(236 236 238 / 35%);
@@ -159,17 +127,4 @@ code {
 
 .docs:hover {
   color: #ececee;
-}
-
-@media (max-width: 460px) {
-  .details dl {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  .details dl > div,
-  .details dl > div:first-child,
-  .details dl > div:last-child {
-    padding: 14px;
-  }
 }

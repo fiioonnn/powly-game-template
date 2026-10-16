@@ -34,7 +34,6 @@ export function App({ connection }: { connection: Connection }) {
   }, [session]);
 
   const profile = snapshot.apiProfile;
-  const unlocked = snapshot.achievements.filter((achievement) => achievement.unlocked).length;
 
   return (
     <main>
@@ -42,42 +41,23 @@ export function App({ connection }: { connection: Connection }) {
         <h1>Powly game template</h1>
         <p className="intro">React + TypeScript + Vite</p>
 
-        <section className="details" aria-label="Powly platform information">
-          <header className="player">
-            {profile.avatarUrl ? (
-              <img src={profile.avatarUrl} alt="" />
-            ) : (
-              <span className="avatar">{initials(profile.username)}</span>
-            )}
-            <div>
-              <span className="player-label">Player</span>
-              <strong>{profile.username}</strong>
-            </div>
-            <span
-              className={`status ${session ? "online" : ""}`}
-              title={connection.error ?? undefined}
-            >
-              <span />
-              {paused ? "Paused" : session ? "Connected" : "Preview"}
-            </span>
-          </header>
-
-          <dl>
-            <div>
-              <dt>Platform API</dt>
-              <dd>GET /me</dd>
-            </div>
-            <div>
-              <dt>Best score</dt>
-              <dd>{snapshot.bestScore}</dd>
-            </div>
-            <div>
-              <dt>Achievements</dt>
-              <dd>
-                {unlocked} / {snapshot.achievements.length}
-              </dd>
-            </div>
-          </dl>
+        <section className="player" aria-label="Player">
+          {profile.avatarUrl ? (
+            <img src={profile.avatarUrl} alt="" />
+          ) : (
+            <span className="avatar">{initials(profile.username)}</span>
+          )}
+          <div>
+            <span className="player-label">Player</span>
+            <strong>{profile.username}</strong>
+          </div>
+          <span
+            className={`status ${session ? "online" : ""}`}
+            title={connection.error ?? undefined}
+          >
+            <span />
+            {paused ? "Paused" : session ? "Connected" : "Preview"}
+          </span>
         </section>
 
         <p className="hint">
