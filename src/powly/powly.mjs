@@ -1,6 +1,6 @@
-/* Powly SDK 0.3.0: ES module */
+/* Powly SDK 0.4.1: ES module */
 /** This SDK's version; Powly's Studio shows it next to the downloads. */
-const SDK_VERSION = "0.3.0";
+const SDK_VERSION = "0.4.1";
 
 // The messages between a game (this SDK, inside Powly's iframe) and the Powly page that framed it.
 // Shared with the host side (apps/web/components/player/sdk-host.ts).
@@ -12,6 +12,14 @@ const SDK_VERSION = "0.3.0";
 // 3. From then on the game also reports to Powly Anti-Cheat over the port (`PacSample`, src/pac.ts).
 const PROTOCOL = "powly-sdk";
 const PROTOCOL_VERSION = 1;
+/** The corners Powly's options button (its mascot, which opens the player's options) can be in. */
+const OPTIONS_BUTTON_CORNERS = [
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+];
+const isOptionsButtonCorner = (value) => OPTIONS_BUTTON_CORNERS.includes(value);
 const isInitMessage = (data) => typeof data === "object" &&
     data !== null &&
     data.protocol === PROTOCOL &&
@@ -21,7 +29,7 @@ const isRequestMessage = (data) => typeof data === "object" &&
     data !== null &&
     data.type === "request" &&
     Number.isInteger(data.id) &&
-    ["getSessionToken", "purchases.open", "fullscreen.toggle"].includes(data.method);
+    ["getSessionToken", "purchases.open", "fullscreen.toggle", "invites.open"].includes(data.method);
 
 // The Powly origins this build of the SDK trusts by default: a game only handshakes with a parent
 // page on one of them (unless it passes `powlyOrigin` to `Powly.init()` itself). Set at build
@@ -47,8 +55,9 @@ class PowlyError extends Error {
 // the server's to catch speed hacks), browser functions that were replaced (speed hack scripts and
 // extensions patch timers), traces of automated browsers, and how input arrives (scripted events,
 // clicks without pointer movement as AI agents make them, machine-regular timing as macros and
-// auto-clickers make them). Nothing is sent anywhere else, and nothing here reads what the player
-// types: only event counts and timings.
+// auto-clickers make them), and whether the player plays at all (any trusted input, gamepads
+// included: Powly closes games nobody plays). Nothing is sent anywhere else, and nothing here
+// reads what the player types: only event counts and timings.
 //
 // In real players' runs (not developer mode) the SDK also guards the game's code against being
 // copied (`guard`): the browser's context menu and its view-source, save-page and developer-tools
@@ -60,6 +69,8 @@ class PowlyError extends Error {
 // `tamperedFunctions` are shared with the Powly page (apps/web/components/player/pac-sensor.ts).
 /** How often the SDK reports (ms). */
 const PAC_SAMPLE_MS = 5000;
+/** A gamepad axis past this counts as input (sticks rest a little off centre). */
+const GAMEPAD_DEADZONE = 0.3;
 const isPacSample = (data) => typeof data === "object" &&
     data !== null &&
     data.type === "pac" &&
@@ -208,6 +219,7 @@ function startPacSensor(port, { guard = false } = {}, win = window) {
         synthetic: 0,
         clicks: 0,
         teleportClicks: 0,
+        activity: 0,
     };
     const keyTimes = [];
     const clickTimes = [];
@@ -225,6 +237,9 @@ function startPacSensor(port, { guard = false } = {}, win = window) {
                 input.synthetic += 1;
             return;
         }
+        input.activity += 1;
+        if (event.type === "wheel")
+            return;
         if (event.type === "pointermove" || event.type === "pointerover") {
             const move = event;
             pointer = { x: move.clientX, y: move.clientY };
@@ -250,7 +265,26 @@ function startPacSensor(port, { guard = false } = {}, win = window) {
         }
         pointer = { x: down.clientX, y: down.clientY };
     };
-    const types = ["keydown", "pointerdown", "pointermove", "pointerover"];
+    const types = ["keydown", "pointerdown", "pointermove", "pointerover", "wheel"];
+    // Gamepads send no events: a pressed button or a pushed stick, looked at a few times a second.
+    const watchGamepads = () => {
+        let pads;
+        try {
+            pads = [...(win.navigator.getGamepads?.() ?? [])];
+        }
+        catch {
+            return;
+        }
+        for (const pad of pads) {
+            if (!pad?.connected)
+                continue;
+            if (pad.buttons.some((button) => button.pressed) ||
+                pad.axes.some((axis) => Math.abs(axis) > GAMEPAD_DEADZONE)) {
+                input.activity += 1;
+                return;
+            }
+        }
+    };
     for (const type of types) {
         win.addEventListener(type, onInput, { capture: true, passive: true });
     }
@@ -318,6 +352,7 @@ function startPacSensor(port, { guard = false } = {}, win = window) {
         input.synthetic = 0;
         input.clicks = 0;
         input.teleportClicks = 0;
+        input.activity = 0;
         dateJump = 0;
         devtools = false;
     };
@@ -326,11 +361,13 @@ function startPacSensor(port, { guard = false } = {}, win = window) {
     const clearInterval = win.clearInterval.bind(win);
     const dateTimer = setInterval(watchDate, 1000);
     const reportTimer = setInterval(report, PAC_SAMPLE_MS);
+    const gamepadTimer = setInterval(watchGamepads, 250);
     const trapTimer = trap ? setInterval(springTrap, 1500) : undefined;
     report();
     return () => {
         clearInterval(dateTimer);
         clearInterval(reportTimer);
+        clearInterval(gamepadTimer);
         if (trapTimer !== undefined)
             clearInterval(trapTimer);
         for (const type of types)
@@ -810,6 +847,299 @@ function createRooms(options) {
     };
 }
 
+// Twitch chat for games that use it (`powly.twitch`): Studio turns it on per game (Configuration →
+// Twitch chat) and players connect Twitch in Powly's settings. Powly tells the game which channel
+// is the player's (GET /twitch); the SDK then reads that channel's chat straight from Twitch, as
+// an anonymous, read-only viewer, so no Twitch credentials ever reach the game.
+//
+//   const { status, channel } = await powly.twitch.connect();
+//   if (status === "connected") {
+//     powly.twitch.on("message", (message) => {
+//       if (message.text === "!jump") player.jump();
+//     });
+//   }
+//
+// Chat is Twitch IRC over a WebSocket (https://dev.twitch.tv/docs/chat/irc/). The connection comes
+// back by itself when it drops, and stops when the launch ends.
+const TWITCH_CHAT_URL = "wss://irc-ws.chat.twitch.tv:443";
+/** What a tag value's escapes stand for (anything else escaped is itself). */
+const TAG_ESCAPES = { s: " ", ":": ";", r: "\r", n: "\n" };
+const unescapeTag = (value) => value.replace(/\\(.)?/g, (_, char) => TAG_ESCAPES[char ?? ""] ?? char ?? "");
+/** One IRC line (without its CRLF), or null when it isn't one. */
+function parseIrcLine(line) {
+    let rest = line;
+    const tags = {};
+    if (rest.startsWith("@")) {
+        const end = rest.indexOf(" ");
+        if (end < 0)
+            return null;
+        for (const pair of rest.slice(1, end).split(";")) {
+            const eq = pair.indexOf("=");
+            const key = eq < 0 ? pair : pair.slice(0, eq);
+            if (key)
+                tags[key] = eq < 0 ? "" : unescapeTag(pair.slice(eq + 1));
+        }
+        rest = rest.slice(end + 1).trimStart();
+    }
+    let nick = null;
+    if (rest.startsWith(":")) {
+        const end = rest.indexOf(" ");
+        if (end < 0)
+            return null;
+        const prefix = rest.slice(1, end);
+        nick = prefix.includes("!") ? prefix.slice(0, prefix.indexOf("!")) : prefix;
+        rest = rest.slice(end + 1).trimStart();
+    }
+    const params = [];
+    const trailingAt = rest.indexOf(" :");
+    const head = trailingAt < 0 ? rest : rest.slice(0, trailingAt);
+    const words = head.split(" ").filter(Boolean);
+    const command = words.shift();
+    if (!command)
+        return null;
+    params.push(...words);
+    if (trailingAt >= 0)
+        params.push(rest.slice(trailingAt + 2));
+    return { tags, nick, command: command.toUpperCase(), params };
+}
+/** "/me" messages arrive wrapped in CTCP: "\u0001ACTION text\u0001". */
+const CTCP = String.fromCharCode(1);
+const actionText = (text) => text.startsWith(`${CTCP}ACTION `) && text.endsWith(CTCP) && text.length > 9
+    ? text.slice(8, -1)
+    : null;
+/** A PRIVMSG as a chat message, or null. */
+function chatMessageOf(message) {
+    if (message.command !== "PRIVMSG" || message.params.length < 2)
+        return null;
+    const { tags } = message;
+    const raw = message.params[1] ?? "";
+    const action = actionText(raw);
+    const badges = {};
+    for (const badge of (tags.badges ?? "").split(",")) {
+        const slash = badge.indexOf("/");
+        if (slash > 0)
+            badges[badge.slice(0, slash)] = badge.slice(slash + 1);
+    }
+    const login = (message.nick ?? "").toLowerCase();
+    const sentAt = Number(tags["tmi-sent-ts"]);
+    return {
+        id: tags.id ?? "",
+        userId: tags["user-id"] ?? "",
+        login,
+        displayName: tags["display-name"] || login,
+        color: /^#[0-9A-Fa-f]{6}$/.test(tags.color ?? "") ? tags.color : null,
+        text: action ?? raw,
+        action: action !== null,
+        bits: Number(tags.bits) > 0 ? Number(tags.bits) : 0,
+        badges,
+        broadcaster: "broadcaster" in badges,
+        moderator: tags.mod === "1" || "moderator" in badges,
+        subscriber: tags.subscriber === "1" || "subscriber" in badges || "founder" in badges,
+        vip: tags.vip === "1" || "vip" in badges,
+        firstMessage: tags["first-msg"] === "1",
+        sentAt: new Date(Number.isFinite(sentAt) && sentAt > 0 ? sentAt : Date.now()).toISOString(),
+    };
+}
+// ── Client ───────────────────────────────────────────────────────────────────
+const RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+/** Twitch pings every few minutes; silence for longer than this means the connection is gone. */
+const SILENCE_MS = 6 * 60_000;
+function createTwitch(options) {
+    const url = options.url ?? TWITCH_CHAT_URL;
+    const listeners = new Map();
+    let state = "idle";
+    let channel = null;
+    let socket = null;
+    let attempt = 0;
+    let retryTimer = null;
+    let silenceTimer = null;
+    /** Resolves `connect()` once the channel is joined (or the first try failed). */
+    let joined = null;
+    let stopped = false;
+    const emit = (event, value) => {
+        for (const listener of listeners.get(event) ?? []) {
+            try {
+                listener(value);
+            }
+            catch (error) {
+                console.error("[powly] a Twitch listener failed", error);
+            }
+        }
+    };
+    const setState = (next) => {
+        if (state === next)
+            return;
+        state = next;
+        emit("state", next);
+    };
+    const settle = () => {
+        joined?.();
+        joined = null;
+    };
+    const clearTimers = () => {
+        if (retryTimer)
+            clearTimeout(retryTimer);
+        if (silenceTimer)
+            clearTimeout(silenceTimer);
+        retryTimer = null;
+        silenceTimer = null;
+    };
+    const close = () => {
+        clearTimers();
+        const open = socket;
+        socket = null;
+        if (open) {
+            open.onopen = open.onmessage = open.onclose = open.onerror = null;
+            try {
+                open.close();
+            }
+            catch {
+                // Already closed.
+            }
+        }
+    };
+    const watchSilence = () => {
+        if (silenceTimer)
+            clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => reconnect(), SILENCE_MS);
+    };
+    /** Opens chat again after a pause (longer each try in a row), or at once (`now`). */
+    const reconnect = (now = false) => {
+        close();
+        if (stopped || !channel || state === "closed" || state === "idle")
+            return;
+        setState("reconnecting");
+        settle();
+        const delay = now ? 0 : (RETRY_MS[Math.min(attempt, RETRY_MS.length - 1)] ?? 30_000);
+        attempt += 1;
+        retryTimer = setTimeout(open, delay);
+    };
+    const handle = (message, ws) => {
+        switch (message.command) {
+            case "PING":
+                ws.send(`PONG :${message.params[0] ?? "tmi.twitch.tv"}`);
+                return;
+            case "RECONNECT":
+                // Twitch is restarting the server: come back right away.
+                reconnect(true);
+                return;
+            case "ROOMSTATE":
+            case "366":
+                attempt = 0;
+                setState("connected");
+                settle();
+                return;
+            case "PRIVMSG": {
+                const chat = chatMessageOf(message);
+                if (chat)
+                    emit("message", chat);
+                return;
+            }
+            case "CLEARMSG": {
+                const id = message.tags["target-msg-id"];
+                if (id)
+                    emit("delete", { id });
+                return;
+            }
+            case "CLEARCHAT":
+                emit("clear", { userId: message.tags["target-user-id"] || null });
+                return;
+        }
+    };
+    const open = () => {
+        retryTimer = null;
+        if (stopped || !channel)
+            return;
+        const login = channel.login;
+        let ws;
+        try {
+            ws = new WebSocket(url);
+        }
+        catch {
+            reconnect();
+            return;
+        }
+        socket = ws;
+        ws.onopen = () => {
+            // Anonymous and read-only: Twitch accepts any "justinfan" nick without a password.
+            ws.send("CAP REQ :twitch.tv/tags twitch.tv/commands");
+            ws.send("PASS SCHMOOPIIE");
+            ws.send(`NICK justinfan${Math.floor(10_000 + Math.random() * 89_999)}`);
+            ws.send(`JOIN #${login}`);
+            watchSilence();
+        };
+        ws.onmessage = (event) => {
+            if (typeof event.data !== "string")
+                return;
+            watchSilence();
+            for (const line of event.data.split("\r\n")) {
+                if (!line)
+                    continue;
+                const message = parseIrcLine(line);
+                if (message)
+                    handle(message, ws);
+            }
+        };
+        ws.onclose = () => {
+            if (socket === ws)
+                reconnect();
+        };
+        ws.onerror = () => {
+            if (socket === ws)
+                reconnect();
+        };
+    };
+    const disconnect = () => {
+        close();
+        settle();
+        channel = null;
+        attempt = 0;
+        if (state !== "idle")
+            setState("closed");
+    };
+    return {
+        info: options.getInfo,
+        async connect() {
+            const info = await options.getInfo();
+            const next = info.status === "connected" ? info.channel : null;
+            if (!next || stopped) {
+                disconnect();
+                return info;
+            }
+            // Already reading this channel.
+            if (channel?.login === next.login && socket)
+                return info;
+            disconnect();
+            channel = next;
+            setState("connecting");
+            const done = new Promise((resolve) => {
+                joined = resolve;
+            });
+            open();
+            await done;
+            return info;
+        },
+        disconnect,
+        get state() {
+            return state;
+        },
+        get channel() {
+            return channel;
+        },
+        on(event, listener) {
+            const set = listeners.get(event) ?? new Set();
+            set.add(listener);
+            listeners.set(event, set);
+            return () => set.delete(listener);
+        },
+        stop() {
+            stopped = true;
+            disconnect();
+        },
+    };
+}
+
+
 
 
 
@@ -825,6 +1155,7 @@ function createRooms(options) {
 //   await powly.leaderboards.submit("high-score", 1200);
 //   const token = await powly.getSessionToken(); // send it to your backend, which verifies it
 //   const room = await powly.rooms.create();    // realtime parties (src/rooms.ts)
+//   await powly.twitch.connect();                // the streamer's Twitch chat (src/twitch.ts)
 //
 // Nothing here is a security boundary: the game runs in the player's browser. Your backend must
 // verify session tokens (JWKS) or exchange them, and Powly checks everything server-side.
@@ -878,6 +1209,9 @@ function init(options = {}) {
                 type: "init",
                 sdkVersion: SDK_VERSION,
                 pac: 1,
+                ...(isOptionsButtonCorner(options.optionsButton) && {
+                    optionsButton: options.optionsButton,
+                }),
             };
             channel.port1.onmessage = (event) => {
                 const data = event.data;
@@ -928,10 +1262,10 @@ function createSession(port, ready) {
                 listener();
         }
     };
-    const call = (method) => new Promise((resolve, reject) => {
+    const call = (method, extra = {}) => new Promise((resolve, reject) => {
         const id = nextId++;
         pending.set(id, { resolve, reject });
-        port.postMessage({ type: "request", id, method });
+        port.postMessage({ type: "request", id, method, ...extra });
     });
     const getSessionToken = async () => {
         if (expiresAt - Date.now() > 10_000)
@@ -984,6 +1318,8 @@ function createSession(port, ready) {
         invite: sendInvite,
     });
     listeners.get("ended")?.add(() => realtime.stop());
+    const twitch = createTwitch({ getInfo: () => api("/twitch") });
+    listeners.get("ended")?.add(() => twitch.stop());
     const saves = {
         get: async (key) => {
             try {
@@ -1022,8 +1358,26 @@ function createSession(port, ready) {
             list: async () => (await api("/invites")).invites,
             send: sendInvite,
             on: (_event, listener) => realtime.onInvite(listener),
+            open: async (params) => {
+                // Inviting to the room the player is in: who's already there can't be invited to it.
+                const room = realtime.rooms.current;
+                const members = room && params?.room === room.code ? room.members.map((member) => member.playerId) : [];
+                return (await call("invites.open", { params, members }));
+            },
         },
         rooms: realtime.rooms,
+        twitch: {
+            info: twitch.info,
+            connect: twitch.connect,
+            disconnect: twitch.disconnect,
+            get state() {
+                return twitch.state;
+            },
+            get channel() {
+                return twitch.channel;
+            },
+            on: twitch.on,
+        },
         leaderboards: {
             submit: (board, score) => api(`/leaderboards/${path(board)}/scores`, { method: "POST", body: { score } }),
             top: async (board, limit = 10) => (await api(`/leaderboards/${path(board)}?limit=${limit}`))

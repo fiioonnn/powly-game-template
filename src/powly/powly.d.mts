@@ -1,9 +1,13 @@
-/* Powly SDK 0.3.0: types for powly.js and powly.mjs */
+/* Powly SDK 0.4.1: types for powly.js and powly.mjs */
 /** This SDK's version; Powly's Studio shows it next to the downloads. */
-export declare const SDK_VERSION = "0.3.0";
+export declare const SDK_VERSION = "0.4.1";
 
 export declare const PROTOCOL = "powly-sdk";
 export declare const PROTOCOL_VERSION = 1;
+/** The corners Powly's options button (its mascot, which opens the player's options) can be in. */
+export declare const OPTIONS_BUTTON_CORNERS: readonly ["top-left", "top-right", "bottom-left", "bottom-right"];
+export type OptionsButtonCorner = (typeof OPTIONS_BUTTON_CORNERS)[number];
+export declare const isOptionsButtonCorner: (value: unknown) => value is OptionsButtonCorner;
 export type InitMessage = {
     protocol: typeof PROTOCOL;
     version: number;
@@ -14,6 +18,11 @@ export type InitMessage = {
      * SDKs leave it out.
      */
     pac?: 1;
+    /**
+     * Where the game wants Powly's options button to start (`Powly.init({ optionsButton })`); the
+     * player's own choice wins. Left out: Powly's default (top left).
+     */
+    optionsButton?: OptionsButtonCorner;
 };
 export type PlayerProfile = {
     /** This player's ID in this game: stable, and different in every game. */
@@ -45,11 +54,22 @@ export type FailedMessage = {
     type: "failed";
     error: string;
 };
-export type HostMethod = "getSessionToken" | "purchases.open" | "fullscreen.toggle";
+export type HostMethod = "getSessionToken" | "purchases.open" | "fullscreen.toggle" | "invites.open";
 export type RequestMessage = {
     type: "request";
     id: number;
     method: HostMethod;
+    /** "invites.open": launch params every invite sent from Powly's dialog carries (e.g. a room). */
+    params?: Record<string, string>;
+    /**
+     * "invites.open": player IDs already playing with the player (the room's members): Powly's
+     * dialog shows them as in the party, without an Invite button.
+     */
+    members?: string[];
+};
+/** What "invites.open" answers once Powly's dialog closed: the friends the player invited. */
+export type InvitesOpenResult = {
+    invited: string[];
 };
 export type ResponseMessage = {
     type: "response";
@@ -102,6 +122,8 @@ export type PacSample = {
         keyIntervalSd: number | null;
         clickIntervals: number;
         clickIntervalSd: number | null;
+        /** Every trusted interaction: key presses, clicks, taps, pointer movement, wheel, gamepads. */
+        activity: number;
     };
 };
 export declare const isPacSample: (data: unknown) => data is PacSample;
@@ -403,6 +425,93 @@ export declare function createRooms(options: {
     stop(): void;
 };
 
+export declare const TWITCH_CHAT_URL = "wss://irc-ws.chat.twitch.tv:443";
+export type TwitchStatus = "connected" | "not_connected";
+/** What GET /twitch answers: the game's Twitch chat setting and the player's channel. */
+export type TwitchInfo = {
+    /** The game's Twitch chat setting in Studio. */
+    mode: "optional" | "required";
+    /** "connected": `channel` is the player's. "not_connected": they haven't connected Twitch. */
+    status: TwitchStatus;
+    channel: {
+        login: string;
+        displayName: string;
+    } | null;
+};
+export type TwitchChatMessage = {
+    /** Twitch's message ID (what "delete" events name). */
+    id: string;
+    /** The chatter's Twitch user ID, login and display name. */
+    userId: string;
+    login: string;
+    displayName: string;
+    /** Their name colour as "#RRGGBB", or null when they never picked one. */
+    color: string | null;
+    text: string;
+    /** A "/me" message. */
+    action: boolean;
+    /** Bits cheered with the message (0 if none). */
+    bits: number;
+    /** Badge name → version, e.g. { subscriber: "12", moderator: "1" }. */
+    badges: Record<string, string>;
+    broadcaster: boolean;
+    moderator: boolean;
+    subscriber: boolean;
+    vip: boolean;
+    /** The chatter's first message in this channel ever. */
+    firstMessage: boolean;
+    /** When Twitch received it (ISO 8601). */
+    sentAt: string;
+};
+/** The chat connection: "idle" until `connect()`, "closed" after `disconnect()`. */
+export type TwitchChatState = "idle" | "connecting" | "connected" | "reconnecting" | "closed";
+type Events = {
+    message: TwitchChatMessage;
+    /** A moderator deleted one message. */
+    delete: {
+        id: string;
+    };
+    /** A moderator cleared the chat (`userId` null) or one chatter's messages (timeout, ban). */
+    clear: {
+        userId: string | null;
+    };
+    state: TwitchChatState;
+};
+export type TwitchApi = {
+    /** The game's setting and the player's channel, without opening chat. */
+    info(): Promise<TwitchInfo>;
+    /**
+     * Opens the player's chat when they have a channel to read (`status: "connected"`). Resolves
+     * with the info, once chat is joined (or failed to; it keeps retrying in the background).
+     */
+    connect(): Promise<TwitchInfo>;
+    /** Closes chat; `connect()` opens it again. */
+    disconnect(): void;
+    readonly state: TwitchChatState;
+    /** The channel chat is open for, or null. */
+    readonly channel: TwitchInfo["channel"];
+    on<E extends keyof Events>(event: E, listener: (value: Events[E]) => void): () => void;
+};
+export type IrcMessage = {
+    tags: Record<string, string>;
+    /** The sender's nick (the part of the prefix before "!"), or null. */
+    nick: string | null;
+    command: string;
+    params: string[];
+};
+/** One IRC line (without its CRLF), or null when it isn't one. */
+export declare function parseIrcLine(line: string): IrcMessage | null;
+/** A PRIVMSG as a chat message, or null. */
+export declare function chatMessageOf(message: IrcMessage): TwitchChatMessage | null;
+export declare function createTwitch(options: {
+    getInfo: () => Promise<TwitchInfo>;
+    /** Twitch chat's WebSocket URL (tests point it elsewhere). */
+    url?: string;
+}): TwitchApi & {
+    stop(): void;
+};
+
+
 
 
 
@@ -417,6 +526,12 @@ export type InitOptions = {
     powlyOrigin?: string | string[];
     /** How long to wait for Powly to answer (ms). Default 10 s. */
     timeoutMs?: number;
+    /**
+     * Which corner Powly's options button (its mascot, which opens the player's options) starts in:
+     * "top-left" (the default), "top-right", "bottom-left" or "bottom-right". Pick the one your own
+     * UI leaves free. Players can still move it, and their choice wins.
+     */
+    optionsButton?: OptionsButtonCorner;
 };
 export type LeaderboardEntry = {
     rank: number;
@@ -427,6 +542,8 @@ export type LeaderboardEntry = {
 export type Friend = {
     playerId: string;
     username: string;
+    /** Their picture (by player ID), or null; missing from older Powly servers. */
+    avatarUrl?: string | null;
 };
 export type Achievement = {
     key: string;
@@ -475,9 +592,24 @@ export type PowlySession = {
         send(playerId: string, params?: Record<string, string>): Promise<void>;
         /** A friend invited the player to this game while they're playing it (live, realtime). */
         on(event: "received", listener: (invite: Invite) => void): () => void;
+        /**
+         * Opens Powly's own invite dialog over the game (drawn by Powly, not the game): the player's
+         * friends who play it, each with an Invite button. Every invite sent from it carries `params`
+         * (e.g. `{ room: code }`), like `send`. With the code of the room the player is in, its members
+         * show as already in the party (no Invite button). Resolves when the player closes it, with
+         * the player IDs they invited. Needs the friends.read and invites.write scopes.
+         */
+        open(params?: Record<string, string>): Promise<{
+            invited: string[];
+        }>;
     };
     /** Realtime rooms (parties) with other players of this game. */
     rooms: RoomsApi;
+    /**
+     * The chat of the player's Twitch channel, for games with Twitch chat on (Studio → Configuration
+     * → Twitch chat). Read-only; calls fail with a 403 PowlyError while the setting is off.
+     */
+    twitch: TwitchApi;
     leaderboards: {
         submit(board: string, score: number): Promise<{
             best: number;
