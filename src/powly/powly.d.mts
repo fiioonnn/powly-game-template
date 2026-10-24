@@ -1,6 +1,6 @@
-/* Powly SDK 0.5.0: types for powly.js and powly.mjs */
+/* Powly SDK 0.6.0: types for powly.js and powly.mjs */
 /** This SDK's version; Powly's Studio shows it next to the downloads. */
-export declare const SDK_VERSION = "0.5.0";
+export declare const SDK_VERSION = "0.6.0";
 
 export declare const PROTOCOL = "powly-sdk";
 export declare const PROTOCOL_VERSION = 1;
@@ -82,7 +82,11 @@ export type ResponseMessage = {
     ok: false;
     error: string;
 };
-export type HostEventName = "pause" | "resume" | "ended";
+/**
+ * "shown": Powly's loading screen is gone and the game is on screen (once per launch). "pause" /
+ * "resume": Powly UI covers the game or the tab is hidden, and back. "ended": the launch ended.
+ */
+export type HostEventName = "shown" | "pause" | "resume" | "ended";
 export type EventMessage = {
     type: "event";
     event: HostEventName;
@@ -669,8 +673,15 @@ export type PowlySession = {
      * game's store page and the launch ends ("ended" fires). Save the player's progress first.
      */
     quit(): Promise<void>;
-    /** Powly UI opened over the game ("pause"), closed ("resume"), or the launch ended ("ended"). */
+    /**
+     * Powly's loading screen is gone and the game is on screen ("shown": start the intro or music
+     * here), Powly UI opened over the game ("pause"), closed ("resume"), or the launch ended
+     * ("ended"). "shown" comes once per launch; listening for it later calls the listener right
+     * away.
+     */
     on(event: HostEventName, listener: () => void): () => void;
+    /** Whether Powly's loading screen is gone and the game is on screen ("shown" came). */
+    readonly shown: boolean;
 };
 /** Starts the SDK. Rejects when the game wasn't launched from Powly. */
 export declare function init(options?: InitOptions): Promise<PowlySession>;

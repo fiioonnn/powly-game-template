@@ -1,6 +1,6 @@
-/* Powly SDK 0.5.0: ES module */
+/* Powly SDK 0.6.0: ES module */
 /** This SDK's version; Powly's Studio shows it next to the downloads. */
-const SDK_VERSION = "0.5.0";
+const SDK_VERSION = "0.6.0";
 
 // The messages between a game (this SDK, inside Powly's iframe) and the Powly page that framed it.
 // Shared with the host side (apps/web/components/player/sdk-host.ts).
@@ -1245,6 +1245,8 @@ function createSession(port, ready) {
     let nextId = 1;
     const pending = new Map();
     const listeners = new Map();
+    // "shown" comes once; games that listen for it later still hear it.
+    let shown = false;
     port.onmessage = (event) => {
         const data = event.data;
         if (data?.type === "response") {
@@ -1258,7 +1260,13 @@ function createSession(port, ready) {
                 waiting.reject(new PowlyError(data.error));
         }
         else if (data?.type === "event") {
-            for (const listener of listeners.get(data.event) ?? [])
+            const name = data.event;
+            if (name === "shown") {
+                if (shown)
+                    return;
+                shown = true;
+            }
+            for (const listener of listeners.get(name) ?? [])
                 listener();
         }
     };
@@ -1407,7 +1415,16 @@ function createSession(port, ready) {
             const set = listeners.get(event) ?? new Set();
             set.add(listener);
             listeners.set(event, set);
+            if (event === "shown" && shown) {
+                queueMicrotask(() => {
+                    if (set.has(listener))
+                        listener();
+                });
+            }
             return () => set.delete(listener);
+        },
+        get shown() {
+            return shown;
         },
     };
 }
