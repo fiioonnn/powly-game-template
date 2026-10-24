@@ -1,6 +1,6 @@
-/* Powly SDK 0.4.1: ES module */
+/* Powly SDK 0.5.0: ES module */
 /** This SDK's version; Powly's Studio shows it next to the downloads. */
-const SDK_VERSION = "0.4.1";
+const SDK_VERSION = "0.5.0";
 
 // The messages between a game (this SDK, inside Powly's iframe) and the Powly page that framed it.
 // Shared with the host side (apps/web/components/player/sdk-host.ts).
@@ -29,7 +29,7 @@ const isRequestMessage = (data) => typeof data === "object" &&
     data !== null &&
     data.type === "request" &&
     Number.isInteger(data.id) &&
-    ["getSessionToken", "purchases.open", "fullscreen.toggle", "invites.open"].includes(data.method);
+    ["getSessionToken", "purchases.open", "fullscreen.toggle", "invites.open", "quit"].includes(data.method);
 
 // The Powly origins this build of the SDK trusts by default: a game only handshakes with a parent
 // page on one of them (unless it passes `powlyOrigin` to `Powly.init()` itself). Set at build
@@ -1399,6 +1399,9 @@ function createSession(port, ready) {
             toggle: async () => {
                 await call("fullscreen.toggle");
             },
+        },
+        quit: async () => {
+            await call("quit");
         },
         on(event, listener) {
             const set = listeners.get(event) ?? new Set();

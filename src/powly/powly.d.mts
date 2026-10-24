@@ -1,6 +1,6 @@
-/* Powly SDK 0.4.1: types for powly.js and powly.mjs */
+/* Powly SDK 0.5.0: types for powly.js and powly.mjs */
 /** This SDK's version; Powly's Studio shows it next to the downloads. */
-export declare const SDK_VERSION = "0.4.1";
+export declare const SDK_VERSION = "0.5.0";
 
 export declare const PROTOCOL = "powly-sdk";
 export declare const PROTOCOL_VERSION = 1;
@@ -54,7 +54,7 @@ export type FailedMessage = {
     type: "failed";
     error: string;
 };
-export type HostMethod = "getSessionToken" | "purchases.open" | "fullscreen.toggle" | "invites.open";
+export type HostMethod = "getSessionToken" | "purchases.open" | "fullscreen.toggle" | "invites.open" | "quit";
 export type RequestMessage = {
     type: "request";
     id: number;
@@ -664,6 +664,11 @@ export type PowlySession = {
     fullscreen: {
         toggle(): Promise<void>;
     };
+    /**
+     * Closes the game, like the exit button in Powly's options bar: the player goes back to the
+     * game's store page and the launch ends ("ended" fires). Save the player's progress first.
+     */
+    quit(): Promise<void>;
     /** Powly UI opened over the game ("pause"), closed ("resume"), or the launch ended ("ended"). */
     on(event: HostEventName, listener: () => void): () => void;
 };
